@@ -1,0 +1,331 @@
+{
+  "info": {
+    "name": "MediCare Hub API",
+    "description": "Complete API collection for MediCare Hub Django REST backend.\n\nVariables:\n- base_url: http://127.0.0.1:8000\n- access_token: JWT access token (set after login)\n- refresh_token: stored in HttpOnly cookie automatically\n- test_email / test_password: set locally after running seed_test_data.py (do not commit real passwords)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://127.0.0.1:8000" },
+    { "key": "access_token", "value": "" },
+    { "key": "refresh_token", "value": "" },
+    { "key": "test_email", "value": "hospital.test@medicarehub.test" },
+    { "key": "test_password", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "1. Authentication",
+      "item": [
+        {
+          "name": "Register Hospital User",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"new.hospital@example.com\",\n  \"password\": \"{{test_password}}\",\n  \"first_name\": \"Jane\",\n  \"last_name\": \"Hospital\",\n  \"role\": \"HOSPITAL\",\n  \"organisation_name\": \"City Clinic\",\n  \"organisation_type\": \"HOSPITAL\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/auth/register/"
+          },
+          "response": []
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const data = pm.response.json();",
+                  "  pm.collectionVariables.set('access_token', data.access);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{test_email}}\",\n  \"password\": \"{{test_password}}\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/auth/login/"
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": "{{base_url}}/api/v1/auth/token/refresh/"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/auth/me/"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"Updated\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/auth/me/"
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/auth/logout/"
+          },
+          "response": []
+        },
+        {
+          "name": "Password Reset Request",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"hospital.test@medicarehub.test\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/auth/password-reset/"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Marketplace",
+      "item": [
+        {
+          "name": "List Products (search/filter)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/marketplace/products/?search=Amoxicillin&page_size=24",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "marketplace", "products", ""],
+              "query": [
+                { "key": "search", "value": "Amoxicillin" },
+                { "key": "category", "value": "", "disabled": true },
+                { "key": "supplier", "value": "", "disabled": true },
+                { "key": "min_price", "value": "", "disabled": true },
+                { "key": "max_price", "value": "", "disabled": true },
+                { "key": "in_stock", "value": "true", "disabled": true },
+                { "key": "page_size", "value": "24" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Product Detail",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/marketplace/products/{{product_id}}/"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Orders",
+      "item": [
+        {
+          "name": "Get Cart",
+          "request": { "method": "GET", "url": "{{base_url}}/api/v1/orders/cart/" },
+          "response": []
+        },
+        {
+          "name": "Add to Cart",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_id\": \"{{product_id}}\",\n  \"quantity\": 10\n}"
+            },
+            "url": "{{base_url}}/api/v1/orders/cart/"
+          },
+          "response": []
+        },
+        {
+          "name": "Remove from Cart",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_id\": \"{{product_id}}\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/orders/cart/"
+          },
+          "response": []
+        },
+        {
+          "name": "Checkout",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Urgent delivery\",\n  \"payment_terms\": \"IMMEDIATE\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/orders/checkout/"
+          },
+          "response": []
+        },
+        {
+          "name": "List Orders",
+          "request": { "method": "GET", "url": "{{base_url}}/api/v1/orders/orders/" },
+          "response": []
+        },
+        {
+          "name": "Order Detail",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/orders/orders/{{order_id}}/"
+          },
+          "response": []
+        },
+        {
+          "name": "Approve Order",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/orders/orders/{{order_id}}/approve/"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Payments",
+      "item": [
+        {
+          "name": "List Payments",
+          "request": { "method": "GET", "url": "{{base_url}}/api/v1/payments/payments/" },
+          "response": []
+        },
+        {
+          "name": "Initiate Payment",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": \"{{order_id}}\",\n  \"payment_method\": \"mpesa\",\n  \"phone\": \"255700000000\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/payments/payments/initiate/"
+          },
+          "response": []
+        },
+        {
+          "name": "M-Pesa Webhook (dev simulation)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Body\": {\n    \"stkCallback\": {\n      \"ResultCode\": 0,\n      \"ResultDesc\": \"Success\"\n    }\n  }\n}"
+            },
+            "url": "{{base_url}}/api/v1/payments/webhooks/mpesa/"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. Notifications",
+      "item": [
+        {
+          "name": "List Notifications",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/notifications/notifications/"
+          },
+          "response": []
+        },
+        {
+          "name": "Mark Notification Read",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"read\": true\n}" },
+            "url": "{{base_url}}/api/v1/notifications/notifications/{{notification_id}}/"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "6. Analytics",
+      "item": [
+        {
+          "name": "Platform Analytics (Admin)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/analytics/analytics/platform/"
+          },
+          "response": []
+        },
+        {
+          "name": "Supplier Analytics",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/analytics/analytics/supplier/"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "7. Admin",
+      "item": [
+        {
+          "name": "List Users",
+          "request": { "method": "GET", "url": "{{base_url}}/api/v1/auth/users/" },
+          "response": []
+        },
+        {
+          "name": "Pending Suppliers",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/admin/suppliers/pending/"
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Supplier",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/admin/suppliers/{{supplier_id}}/verify/"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
