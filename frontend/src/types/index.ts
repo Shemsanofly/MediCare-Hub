@@ -36,11 +36,17 @@ export type {
 
   ProductFilters,
 
+  ProductImage,
+
+  ProductOffersResponse,
+
   RecentOrder,
 
   RegistrationRequest,
 
   StockAlert,
+
+  SupplierOffer,
 
   SupplierSummary,
 

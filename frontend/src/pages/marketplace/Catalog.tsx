@@ -64,6 +64,7 @@ const Catalog = () => {
   const [filters, setFilters] = useState<CatalogFilters>(() =>
     parseFiltersFromParams(searchParams),
   );
+  const [viewMode, setViewMode] = useState<'grid' | 'supplier'>('grid');
 
   useEffect(() => {
     const next = filtersToParams(debouncedSearch, filters);
@@ -128,6 +129,20 @@ const Catalog = () => {
   const suppliers: SupplierSummary[] = suppliersQuery.data ?? [];
   const products = productsQuery.data ?? [];
 
+  // Group the visible products by supplier so a buyer can browse one supplier's
+  // full catalogue and prices together (highest-rated suppliers first).
+  const productsBySupplier = useMemo(() => {
+    const groups = new Map<string, { supplier: Product['supplier']; products: Product[] }>();
+    for (const product of products) {
+      const key = product.supplier?.id ?? 'unknown';
+      if (!groups.has(key)) groups.set(key, { supplier: product.supplier, products: [] });
+      groups.get(key)!.products.push(product);
+    }
+    return Array.from(groups.values()).sort(
+      (a, b) => (b.supplier?.trust_score ?? 0) - (a.supplier?.trust_score ?? 0),
+    );
+  }, [products]);
+
   return (
     <div className="space-y-6">
       <div>
@@ -161,6 +176,32 @@ const Catalog = () => {
         )}
 
         <div>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <p className="text-sm text-gray-500">
+              {productsQuery.isLoading ? '' : `${products.length} product${products.length === 1 ? '' : 's'}`}
+            </p>
+            <div className="inline-flex overflow-hidden rounded-lg border border-gray-200 text-sm">
+              <button
+                type="button"
+                onClick={() => setViewMode('grid')}
+                className={`px-3 py-1.5 font-medium ${
+                  viewMode === 'grid' ? 'bg-primary text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                All products
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('supplier')}
+                className={`px-3 py-1.5 font-medium ${
+                  viewMode === 'supplier' ? 'bg-primary text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                By supplier
+              </button>
+            </div>
+          </div>
+
           {productsQuery.isLoading ? (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {Array.from({ length: 6 }).map((_, index) => (
@@ -170,6 +211,39 @@ const Catalog = () => {
           ) : products.length === 0 ? (
             <div className="rounded-xl border border-gray-100 bg-white p-12 text-center shadow-sm">
               <p className="text-gray-500">No products match your filters.</p>
+            </div>
+          ) : viewMode === 'supplier' ? (
+            <div className="space-y-8">
+              {productsBySupplier.map((group) => (
+                <section key={group.supplier?.id ?? 'unknown'}>
+                  <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-gray-100 pb-2">
+                    <h2 className="text-lg font-semibold text-gray-900">
+                      {group.supplier?.organisation_name ?? 'Unknown supplier'}
+                    </h2>
+                    <span className="rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary">
+                      ★ {group.supplier?.trust_score ?? 0}
+                    </span>
+                    {group.supplier?.average_delivery_days != null && (
+                      <span className="text-xs text-gray-500">
+                        ~{group.supplier.average_delivery_days} day delivery
+                      </span>
+                    )}
+                    <span className="ml-auto text-sm text-gray-400">
+                      {group.products.length} product{group.products.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                    {group.products.map((product) => (
+                      <ProductCard
+                        key={product.id}
+                        product={product}
+                        onAddToCart={handleAddToCart}
+                        onRequestQuote={handleRequestQuote}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))}
             </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">

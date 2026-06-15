@@ -24,6 +24,12 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
       },
+      // Product images are served by the backend at /uploads; proxy them so
+      // uploaded images render through the dev server.
+      '/uploads': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
     },
   },
 });

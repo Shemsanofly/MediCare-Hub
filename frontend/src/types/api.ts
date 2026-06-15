@@ -110,6 +110,10 @@ export interface RegistrationRequest {
 
   tmda_license?: string;
 
+  nida_id?: string;
+
+  kyc_answers?: Record<string, string>;
+
 }
 
 
@@ -193,6 +197,9 @@ export interface ApiErrorResponse {
   detail?: string;
 
   message?: string;
+
+  /** Machine-readable error code, e.g. "EMAIL_NOT_VERIFIED". */
+  code?: string;
 
   [key: string]: string | string[] | undefined;
 
@@ -488,6 +495,20 @@ export interface ProductBatch {
 
 /** Marketplace product. */
 
+export interface ProductImage {
+
+  id: string;
+
+  url: string;
+
+  is_primary: boolean;
+
+  uploaded_at: string;
+
+}
+
+
+
 export interface Product {
 
   id: string;
@@ -518,6 +539,10 @@ export interface Product {
 
   is_active: boolean;
 
+  image_url: string | null;
+
+  images: ProductImage[];
+
   category: Category;
 
   supplier: SupplierSummary;
@@ -531,6 +556,66 @@ export interface Product {
   created_at: string;
 
   updated_at: string;
+
+}
+
+
+
+/** A single supplier's offer for a product, used to compare suppliers. */
+
+export interface SupplierOffer {
+
+  product_id: string;
+
+  is_current: boolean;
+
+  price: string;
+
+  currency: string;
+
+  minimum_order_quantity: number;
+
+  total_quantity_available: number;
+
+  inventory_status: string;
+
+  in_stock: boolean;
+
+  image_url: string | null;
+
+  supplier: SupplierSummary;
+
+  is_lowest_price: boolean;
+
+  is_highest_rated: boolean;
+
+  is_fastest_delivery: boolean;
+
+}
+
+
+
+/** Response for the product offers (multi-supplier comparison) endpoint. */
+
+export interface ProductOffersResponse {
+
+  product: {
+
+    id: string;
+
+    name: string;
+
+    generic_name: string;
+
+    gtin: string;
+
+    unit_of_measure: string;
+
+  };
+
+  offer_count: number;
+
+  offers: SupplierOffer[];
 
 }
 

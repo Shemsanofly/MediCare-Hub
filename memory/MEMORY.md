@@ -1,0 +1,2 @@
+- [Stack switched to Express + SQLite](stack-switched-to-express-sqlite.md) — backend migration note
+- [Deployed with Caddy HTTPS](deployed-with-caddy-https.md) — live at https://agent01.overssh.com

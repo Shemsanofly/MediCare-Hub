@@ -2,7 +2,7 @@ export { adminApi } from './adminApi';
 export { analyticsApi } from './analyticsApi';
 export { authApi } from './authApi';
 export { dashboardApi } from './dashboardApi';
-export { apiClient, extractErrorMessage } from './axiosConfig';
+export { apiClient, extractErrorMessage, getMediaUrl } from './axiosConfig';
 export { marketplaceApi } from './marketplaceApi';
 export { notificationsApi } from './notificationsApi';
 export { ordersApi } from './ordersApi';

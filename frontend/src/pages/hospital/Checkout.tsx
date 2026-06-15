@@ -34,10 +34,17 @@ const Checkout = () => {
         payment_terms: 'IMMEDIATE',
       }),
     onSuccess: (response) => {
-      toast.success('Order placed successfully.');
+      const count = response.data.count ?? 1;
       void queryClient.invalidateQueries({ queryKey: ['cart'] });
       void queryClient.invalidateQueries({ queryKey: ['recentOrders'] });
-      navigate(`/hospital/orders/${response.data.order.id}`);
+      void queryClient.invalidateQueries({ queryKey: ['hospitalOrders'] });
+      if (count > 1) {
+        toast.success(`${count} orders placed — one per supplier.`);
+        navigate('/hospital/orders');
+      } else {
+        toast.success('Order placed successfully.');
+        navigate(`/hospital/orders/${response.data.order.id}`);
+      }
     },
   });
 

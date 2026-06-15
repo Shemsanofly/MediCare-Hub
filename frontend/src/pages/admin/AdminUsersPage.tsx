@@ -61,6 +61,19 @@ const AdminUsersPage = () => {
     },
   });
 
+  // Manually verify a user's email (fallback when email verification fails).
+  const verifyMutation = useMutation({
+    mutationFn: (userId: string) => adminApi.updateUser(userId, { is_verified: true }),
+    onSuccess: (response) => {
+      toast.success('Email marked as verified. The user can now sign in.');
+      setSelectedUser(response.data);
+      void queryClient.invalidateQueries({ queryKey: ['adminUsers'] });
+    },
+    onError: (error: AxiosError<ApiErrorResponse>) => {
+      toast.error(extractErrorMessage(error));
+    },
+  });
+
   if (usersQuery.isLoading) {
     return <LoadingSpinner label="Loading users…" />;
   }
@@ -145,6 +158,13 @@ const AdminUsersPage = () => {
             ),
           },
           {
+            key: 'is_verified',
+            header: 'Email',
+            render: (row) => (
+              <StatusBadge status={row.is_verified ? 'VERIFIED' : 'PENDING'} />
+            ),
+          },
+          {
             key: 'created_at',
             header: 'Joined',
             render: (row) => new Date(row.created_at).toLocaleDateString(),
@@ -169,6 +189,16 @@ const AdminUsersPage = () => {
               >
                 Close
               </button>
+              {!selectedUser.is_verified && (
+                <button
+                  type="button"
+                  onClick={() => verifyMutation.mutate(selectedUser.id)}
+                  disabled={verifyMutation.isPending}
+                  className="rounded-lg bg-secondary px-4 py-2 text-sm font-semibold text-white hover:bg-secondary-600 disabled:opacity-60"
+                >
+                  {verifyMutation.isPending ? 'Verifying…' : 'Verify email'}
+                </button>
+              )}
               {selectedUser.is_active ? (
                 <button
                   type="button"

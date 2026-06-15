@@ -45,18 +45,8 @@ const FilterSidebar = ({
       </div>
 
       <div>
-        <h3 className="mb-3 text-sm font-semibold text-gray-900">Price range (TZS)</h3>
-        <div className="space-y-3">
-          <input
-            type="range"
-            min={priceRange.min}
-            max={priceRange.max}
-            value={filters.minPrice}
-            onChange={(event) =>
-              onChange({ ...filters, minPrice: Number(event.target.value) })
-            }
-            className="w-full accent-primary"
-          />
+        <h3 className="mb-3 text-sm font-semibold text-gray-900">Max price (TZS)</h3>
+        <div className="space-y-2">
           <input
             type="range"
             min={priceRange.min}
@@ -68,7 +58,7 @@ const FilterSidebar = ({
             className="w-full accent-primary"
           />
           <div className="flex justify-between text-xs text-gray-500">
-            <span>{filters.minPrice.toLocaleString()} TZS</span>
+            <span>Up to</span>
             <span>{filters.maxPrice.toLocaleString()} TZS</span>
           </div>
         </div>

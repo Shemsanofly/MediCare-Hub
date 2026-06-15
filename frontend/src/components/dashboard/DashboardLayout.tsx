@@ -11,6 +11,7 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
     { label: 'Marketplace', to: '/marketplace' },
     { label: 'Cart', to: '/hospital/cart' },
     { label: 'Checkout', to: '/hospital/checkout' },
+    { label: 'My Orders', to: '/hospital/orders' },
   ],
   SUPPLIER: [
     { label: 'Dashboard', to: '/supplier/dashboard', end: true },
