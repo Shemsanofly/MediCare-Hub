@@ -29,6 +29,7 @@ import Checkout from '@/pages/hospital/Checkout';
 import HospitalDashboardPage from '@/pages/hospital/HospitalDashboardPage';
 
 import OrderDetail from '@/pages/hospital/OrderDetail';
+import HospitalOrders from '@/pages/hospital/Orders';
 
 import Catalog from '@/pages/marketplace/Catalog';
 
@@ -88,6 +89,8 @@ const App = () => (
             <Route path="hospital/cart" element={<Cart />} />
 
             <Route path="hospital/checkout" element={<Checkout />} />
+
+            <Route path="hospital/orders" element={<HospitalOrders />} />
 
             <Route path="hospital/orders/:orderId" element={<OrderDetail />} />
 

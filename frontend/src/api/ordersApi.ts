@@ -71,11 +71,15 @@ export interface BackendOrder {
   }>;
   items: BackendOrderItem[];
   status_history?: OrderStatusHistoryEntry[];
+  payment_status?: string | null;
+  payment_amount?: string | null;
   created_at: string;
 }
 
 export interface CheckoutResponse {
   order: BackendOrder;
+  orders?: BackendOrder[];
+  count?: number;
   payment_instructions: string;
 }
 

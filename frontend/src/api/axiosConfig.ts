@@ -11,6 +11,25 @@ import type { ApiErrorResponse } from '@/types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api/v1';
 
+/** Resolve a relative media path (e.g. /uploads/products/...) into a full URL.
+ *  Keeps absolute URLs untouched. Falls back to the current origin when the API
+ *  base is a same-origin relative path.
+ */
+export function getMediaUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  if (/^https?:\/\//i.test(path)) return path;
+
+  const base = API_BASE_URL;
+  let origin: string;
+  try {
+    origin = new URL(base).origin;
+  } catch {
+    origin = window.location.origin;
+  }
+
+  return `${origin}${path.startsWith('/') ? '' : '/'}${path}`;
+}
+
 /** Shared Axios instance for all MediCare Hub API calls. */
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,

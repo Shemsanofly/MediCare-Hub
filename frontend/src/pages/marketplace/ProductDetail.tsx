@@ -16,6 +16,8 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import { marketplaceApi, ordersApi } from '@/api';
 import ProductCard from '@/components/marketplace/ProductCard';
+import ProductGallery from '@/components/marketplace/ProductGallery';
+import SupplierComparison from '@/components/marketplace/SupplierComparison';
 import StatusBadge from '@/components/dashboard/StatusBadge';
 import { ProductCardSkeleton, Skeleton } from '@/components/ui/Skeleton';
 import type { Product } from '@/types';
@@ -120,6 +122,12 @@ const ProductDetail = () => {
         )}
       </div>
 
+      <ProductGallery
+        images={product.images}
+        fallbackUrl={product.image_url}
+        name={product.name}
+      />
+
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
@@ -148,6 +156,8 @@ const ProductDetail = () => {
               )}
             </dl>
           </section>
+
+          <SupplierComparison productId={product.id} />
 
           <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
             <h2 className="mb-3 text-lg font-semibold">Available stock summary</h2>

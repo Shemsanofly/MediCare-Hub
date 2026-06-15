@@ -50,17 +50,22 @@ export const registerStep2Schema = z.object({
 
 export type RegisterStep2Values = z.infer<typeof registerStep2Schema>;
 
-/** Step 3 — role-specific fields. */
+/** Step 3 — role-specific fields. Hospital details are optional (not required
+ *  to create the account), so buyers can register without extra friction. */
 export const registerStep3HospitalSchema = z.object({
-  facility_type: z.string().min(1, 'Facility type is required'),
-  bed_capacity: z.coerce.number().min(1, 'Bed capacity must be at least 1'),
-  procurement_contact: z.string().min(1, 'Procurement contact is required'),
+  facility_type: z.string().optional(),
+  bed_capacity: z.coerce.number().optional(),
+  procurement_contact: z.string().optional(),
 });
 
 export const registerStep3SupplierSchema = z.object({
   tmda_license: z.string().min(1, 'TMDA license is required'),
   brela_registration: z.string().min(1, 'BRELA registration is required'),
   delivery_regions: z.string().min(1, 'Delivery regions are required'),
+  nida_id: z
+    .string()
+    .min(1, 'NIDA number is required')
+    .regex(/^\d{20}$/, 'NIDA number must be exactly 20 digits'),
 });
 
 export type RegisterStep3HospitalValues = z.infer<typeof registerStep3HospitalSchema>;
@@ -69,7 +74,7 @@ export type RegisterStep3SupplierValues = z.infer<typeof registerStep3SupplierSc
 export type RegisterFormValues = RegisterStep1Values &
   RegisterStep2Values &
   Partial<RegisterStep3HospitalValues> &
-  Partial<RegisterStep3SupplierValues>;
+  Partial<RegisterStep3SupplierValues> & { nida_id?: string };
 
 /** Combined registration schema for final validation. */
 export const registerSchema = registerStep1Schema
@@ -82,5 +87,6 @@ export const registerSchema = registerStep1Schema
       tmda_license: z.string().optional(),
       brela_registration: z.string().optional(),
       delivery_regions: z.string().optional(),
+      nida_id: z.string().optional(),
     }),
   );

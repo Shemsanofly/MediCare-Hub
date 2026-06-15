@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { Link } from 'react-router-dom';
 
 import PasswordStrengthIndicator from '@/components/auth/PasswordStrengthIndicator';
+import { SupplierKyc } from '@/components/auth/SupplierKyc';
 import { useRegister } from '@/hooks/useAuth';
 import type { RegistrationRequest } from '@/types';
 import {
@@ -24,11 +25,16 @@ const errorClassName = 'mt-1 text-sm text-red-600';
 
 const STEPS = ['Personal details', 'Organisation', 'Role-specific'];
 
-/** Multi-step registration for hospitals and suppliers. */
+const cardWrapper =
+  'flex min-h-screen items-center justify-center bg-gradient-to-br from-primary-50 to-secondary-50 px-4 py-10';
+
+/** Multi-step registration for hospitals and suppliers (with supplier NIDA KYC). */
 const Register = () => {
   const [step, setStep] = useState(0);
   const [formData, setFormData] = useState<Partial<RegisterFormValues>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // When set, a supplier moves to the NIDA identity-verification (KYC) step.
+  const [kyc, setKyc] = useState<{ payload: RegistrationRequest; nida: string } | null>(null);
   const registerMutation = useRegister();
 
   const step1Form = useForm<RegisterStep1Values>({
@@ -61,7 +67,7 @@ const Register = () => {
     ),
     defaultValues:
       role === 'SUPPLIER'
-        ? { tmda_license: '', brela_registration: '', delivery_regions: '' }
+        ? { tmda_license: '', brela_registration: '', delivery_regions: '', nida_id: '' }
         : { facility_type: '', bed_capacity: 0, procurement_contact: '' },
   });
 
@@ -77,19 +83,24 @@ const Register = () => {
 
   const handleSubmit = step3Form.handleSubmit(async (values) => {
     const merged = { ...formData, ...values } as RegisterFormValues;
-    const { confirmPassword: _, ...payload } = merged;
 
     const registrationPayload: RegistrationRequest = {
-      email: payload.email,
-      password: payload.password,
-      first_name: payload.first_name,
-      last_name: payload.last_name,
-      role: payload.role,
-      organisation_name: payload.organisation_name,
-      organisation_type: payload.organisation_type,
-      registration_number: payload.registration_number || undefined,
-      tmda_license: payload.tmda_license || undefined,
+      email: merged.email,
+      password: merged.password,
+      first_name: merged.first_name,
+      last_name: merged.last_name,
+      role: merged.role,
+      organisation_name: merged.organisation_name,
+      organisation_type: merged.organisation_type,
+      registration_number: merged.registration_number || undefined,
+      tmda_license: merged.tmda_license || undefined,
     };
+
+    // Suppliers must complete NIDA identity verification before the account is created.
+    if (merged.role === 'SUPPLIER') {
+      setKyc({ payload: registrationPayload, nida: (merged.nida_id ?? '').replace(/\s/g, '') });
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -99,8 +110,29 @@ const Register = () => {
     }
   });
 
+  // NIDA identity-verification step (suppliers only).
+  if (kyc) {
+    return (
+      <div className={cardWrapper}>
+        <div className="w-full max-w-lg rounded-2xl bg-white p-8 shadow-lg">
+          <div className="mb-6 text-center">
+            <h1 className="text-2xl font-bold text-primary">Verify your identity</h1>
+            <p className="mt-2 text-sm text-gray-500">Simulated NIDA identity verification</p>
+          </div>
+          <SupplierKyc payload={kyc.payload} nidaId={kyc.nida} onBack={() => setKyc(null)} />
+          <p className="mt-6 text-center text-sm text-gray-500">
+            Already have an account?{' '}
+            <Link to="/login" className="font-medium text-primary hover:text-primary-600">
+              Sign in
+            </Link>
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary-50 to-secondary-50 px-4 py-10">
+    <div className={cardWrapper}>
       <div className="w-full max-w-lg rounded-2xl bg-white p-8 shadow-lg">
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-bold text-primary">Create an account</h1>
@@ -114,9 +146,7 @@ const Register = () => {
             <div key={label} className="flex flex-1 flex-col items-center">
               <div
                 className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold ${
-                  index <= step
-                    ? 'bg-primary text-white'
-                    : 'bg-gray-200 text-gray-500'
+                  index <= step ? 'bg-primary text-white' : 'bg-gray-200 text-gray-500'
                 }`}
               >
                 {index + 1}
@@ -233,7 +263,7 @@ const Register = () => {
             {role === 'HOSPITAL' ? (
               <>
                 <div>
-                  <label htmlFor="facility_type" className={labelClassName}>Facility type</label>
+                  <label htmlFor="facility_type" className={labelClassName}>Facility type <span className="font-normal text-gray-400">(optional)</span></label>
                   <select id="facility_type" className={inputClassName} {...step3Form.register('facility_type')}>
                     <option value="">Select type</option>
                     <option value="GENERAL">General hospital</option>
@@ -246,14 +276,14 @@ const Register = () => {
                   )}
                 </div>
                 <div>
-                  <label htmlFor="bed_capacity" className={labelClassName}>Bed capacity</label>
-                  <input id="bed_capacity" type="number" min={1} className={inputClassName} {...step3Form.register('bed_capacity')} />
+                  <label htmlFor="bed_capacity" className={labelClassName}>Bed capacity <span className="font-normal text-gray-400">(optional)</span></label>
+                  <input id="bed_capacity" type="number" min={0} className={inputClassName} {...step3Form.register('bed_capacity')} />
                   {'bed_capacity' in step3Form.formState.errors && step3Form.formState.errors.bed_capacity && (
                     <p className={errorClassName}>{String(step3Form.formState.errors.bed_capacity.message)}</p>
                   )}
                 </div>
                 <div>
-                  <label htmlFor="procurement_contact" className={labelClassName}>Procurement contact</label>
+                  <label htmlFor="procurement_contact" className={labelClassName}>Procurement contact <span className="font-normal text-gray-400">(optional)</span></label>
                   <input id="procurement_contact" className={inputClassName} {...step3Form.register('procurement_contact')} />
                   {'procurement_contact' in step3Form.formState.errors && step3Form.formState.errors.procurement_contact && (
                     <p className={errorClassName}>{String(step3Form.formState.errors.procurement_contact.message)}</p>
@@ -283,6 +313,24 @@ const Register = () => {
                     <p className={errorClassName}>{String(step3Form.formState.errors.delivery_regions.message)}</p>
                   )}
                 </div>
+                <div>
+                  <label htmlFor="nida_id" className={labelClassName}>National ID (NIDA) number</label>
+                  <input
+                    id="nida_id"
+                    inputMode="numeric"
+                    maxLength={20}
+                    placeholder="20-digit NIDA number"
+                    className={inputClassName}
+                    {...step3Form.register('nida_id')}
+                  />
+                  {'nida_id' in step3Form.formState.errors && step3Form.formState.errors.nida_id ? (
+                    <p className={errorClassName}>{String(step3Form.formState.errors.nida_id.message)}</p>
+                  ) : (
+                    <p className="mt-1 text-xs text-gray-400">
+                      You&apos;ll verify your identity with NIDA security questions in the next step.
+                    </p>
+                  )}
+                </div>
               </>
             )}
 
@@ -295,7 +343,11 @@ const Register = () => {
                 disabled={isSubmitting}
                 className="flex-1 rounded-lg bg-primary py-2.5 font-semibold text-white hover:bg-primary-600 disabled:opacity-60"
               >
-                {isSubmitting ? 'Creating account…' : 'Create account'}
+                {role === 'SUPPLIER'
+                  ? 'Continue to identity verification'
+                  : isSubmitting
+                    ? 'Creating account…'
+                    : 'Create account'}
               </button>
             </div>
           </form>

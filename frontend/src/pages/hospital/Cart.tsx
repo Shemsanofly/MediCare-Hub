@@ -49,7 +49,7 @@ const Cart = () => {
       <div>
         <h1 className="text-2xl font-bold text-primary">Shopping Cart</h1>
         <p className="mt-1 text-gray-600">
-          Review items before checkout. All items must be from the same supplier.
+          Review items before checkout. Items from different suppliers become separate orders.
         </p>
       </div>
 

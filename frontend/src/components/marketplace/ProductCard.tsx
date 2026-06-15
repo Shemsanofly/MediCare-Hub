@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 
+import { getMediaUrl } from '@/api';
 import type { Product } from '@/types';
 
 const LARGE_ORDER_THRESHOLD = 100;
@@ -25,6 +26,23 @@ const ProductCard = ({ product, onAddToCart, onRequestQuote }: ProductCardProps)
 
   return (
     <article className="flex flex-col rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition hover:shadow-md">
+      <Link
+        to={`/marketplace/products/${product.id}`}
+        className="mb-3 block aspect-video overflow-hidden rounded-lg bg-gray-100"
+      >
+        {product.image_url ? (
+          <img
+            src={getMediaUrl(product.image_url) ?? product.image_url}
+            alt={product.name}
+            className="h-full w-full object-cover transition hover:scale-105"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-3xl text-gray-300">
+            📦
+          </div>
+        )}
+      </Link>
+
       <div className="mb-2 flex items-start justify-between gap-2">
         <Link
           to={`/marketplace/products/${product.id}`}

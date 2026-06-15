@@ -27,7 +27,7 @@ export const adminApi = {
   getUser: (userId: string) =>
     apiClient.get<User>(`/admin/users/${userId}/`),
 
-  updateUser: (userId: string, payload: { is_active?: boolean }) =>
+  updateUser: (userId: string, payload: { is_active?: boolean; is_verified?: boolean }) =>
     apiClient.patch<User>(`/admin/users/${userId}/`, payload),
 
   listSuppliers: (params?: { search?: string; status?: string }) =>

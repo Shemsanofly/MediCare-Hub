@@ -5,6 +5,7 @@ import type {
   Product,
   ProductBatch,
   ProductFilters,
+  ProductOffersResponse,
   SupplierSummary,
 } from '@/types';
 
@@ -45,6 +46,12 @@ export const marketplaceApi = {
   getProduct: (productId: string) =>
     apiClient.get<Product>(`/marketplace/products/${productId}/`),
 
+  /** All supplier offers for the same product, for price/rating comparison. */
+  getProductOffers: (productId: string) =>
+    apiClient.get<ProductOffersResponse>(
+      `/marketplace/products/${productId}/offers/`,
+    ),
+
   createProduct: (payload: Record<string, unknown>) =>
     apiClient.post<Product>('/marketplace/products/', payload),
 
@@ -70,6 +77,26 @@ export const marketplaceApi = {
 
   deleteBatch: (batchId: string) =>
     apiClient.delete(`/marketplace/batches/${batchId}/`),
+
+  /** Upload one or more product images in a single request. */
+  uploadImages: (productId: string, files: File[], isPrimary = false) => {
+    const formData = new FormData();
+    files.forEach((file) => formData.append('images', file));
+    if (isPrimary) formData.append('is_primary', '1');
+    return apiClient.post<Product>(
+      `/marketplace/products/${productId}/images/`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+  },
+
+  setPrimaryImage: (productId: string, imageId: string) =>
+    apiClient.patch<Product>(
+      `/marketplace/products/${productId}/images/${imageId}/primary/`,
+    ),
+
+  deleteImage: (productId: string, imageId: string) =>
+    apiClient.delete(`/marketplace/products/${productId}/images/${imageId}/`),
 
   /** Derive categories from the product catalog (no dedicated backend endpoint). */
   getCategories: async () => {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
 import { toast } from 'sonner';
 
@@ -117,16 +117,42 @@ export const useRegister = () => {
     mutate: async (payload: RegistrationRequest) => {
       setIsPending(true);
       try {
-        await authApi.register(payload);
-        toast.success(
-          'Account created! Check your email to verify your address before signing in.',
-        );
-        navigate('/login');
+        const result = await authApi.register(payload);
+        // Send the user to the login page with a flag so it shows the
+        // "account created, please verify your email" banner that survives
+        // page refreshes (a sonner toast doesn't).
+        toast.success('Account created! Check your email to verify your address.');
+        navigate(`/login?justRegistered=1&email=${encodeURIComponent(payload.email)}`);
+        return result;
       } finally {
         setIsPending(false);
       }
     },
   };
+};
+
+/**
+ * Mutation: ask the backend to re-send the verification email. The backend
+ * always returns the same opaque "we've sent it" response — this is so a
+ * caller can't enumerate registered emails by toggling 200 vs 404.
+ */
+export const useResendVerification = () =>
+  useMutation({
+    mutationFn: (email: string) => authApi.resendVerification(email).then((r) => r.data),
+  });
+
+/** Mutation: verify an email using the 6-digit code from the verification email. */
+export const useVerifyEmailCode = () =>
+  useMutation({
+    mutationFn: ({ email, code }: { email: string; code: string }) =>
+      authApi.verifyEmailCode(email, code).then((r) => r.data),
+  });
+
+/** Returns true when a 401 from the auth API was caused by an unverified email. */
+export const isEmailNotVerifiedError = (error: unknown): boolean => {
+  if (!(error instanceof AxiosError)) return false;
+  const data = error.response?.data as ApiErrorResponse | undefined;
+  return data?.code === 'EMAIL_NOT_VERIFIED';
 };
 
 /** Parse DRF field errors from an Axios error. */
