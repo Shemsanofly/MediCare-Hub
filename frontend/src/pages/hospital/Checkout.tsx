@@ -32,19 +32,18 @@ const Checkout = () => {
       ordersApi.checkout({
         notes,
         payment_terms: 'IMMEDIATE',
-      }),
+    }),
     onSuccess: (response) => {
-      const count = response.data.count ?? 1;
+      const supplierOrderCount = response.data.supplier_order_count ?? response.data.orders?.length ?? 1;
       void queryClient.invalidateQueries({ queryKey: ['cart'] });
       void queryClient.invalidateQueries({ queryKey: ['recentOrders'] });
       void queryClient.invalidateQueries({ queryKey: ['hospitalOrders'] });
-      if (count > 1) {
-        toast.success(`${count} orders placed — one per supplier.`);
-        navigate('/hospital/orders');
-      } else {
-        toast.success('Order placed successfully.');
-        navigate(`/hospital/orders/${response.data.order.id}`);
-      }
+      toast.success(
+        supplierOrderCount > 1
+          ? `Order placed with ${supplierOrderCount} suppliers.`
+          : 'Order placed successfully.',
+      );
+      navigate(`/hospital/orders/${response.data.order.id}`);
     },
   });
 
@@ -69,7 +68,7 @@ const Checkout = () => {
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-primary">Checkout</h1>
-        <p className="mt-1 text-gray-600">Submit your procurement order.</p>
+        <p className="mt-1 text-gray-600">Submit one procurement order for all cart items.</p>
       </div>
 
       <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
@@ -79,6 +78,9 @@ const Checkout = () => {
             <li key={item.product_id} className="flex justify-between py-2 text-sm">
               <span>
                 {item.product_name} × {item.quantity}
+                {item.supplier_name ? (
+                  <span className="block text-xs text-gray-400">{item.supplier_name}</span>
+                ) : null}
               </span>
               <span>{formatTZS(item.subtotal, item.currency)}</span>
             </li>

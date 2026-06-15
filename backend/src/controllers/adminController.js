@@ -3,10 +3,12 @@ import {
   listAdminUsers,
   getAdminUser,
   updateAdminUser,
+  deleteAdminUser,
   listAdminSuppliers,
   getAdminSupplier,
   verifySupplier,
   rejectSupplier,
+  deleteAdminSupplier,
   listAdminProducts,
   getAdminProduct,
   updateAdminProduct,
@@ -48,6 +50,15 @@ export async function patchUser(req, res, next) {
   }
 }
 
+export async function deleteUser(req, res, next) {
+  try {
+    deleteAdminUser(req.params.id, req.user.id);
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+}
+
 export const supplierQueryValidation = [
   query('search').optional().trim(),
   query('status').optional().isIn(['PENDING', 'VERIFIED', 'REJECTED', 'SUSPENDED']),
@@ -81,6 +92,15 @@ export async function verifySupplierHandler(req, res, next) {
 export async function rejectSupplierHandler(req, res, next) {
   try {
     res.json(rejectSupplier(req.params.id, req.user.id, req.body.reason));
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function deleteSupplier(req, res, next) {
+  try {
+    deleteAdminSupplier(req.params.id);
+    res.status(204).send();
   } catch (error) {
     next(error);
   }

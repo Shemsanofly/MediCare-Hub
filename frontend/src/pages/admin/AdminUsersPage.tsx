@@ -24,7 +24,7 @@ const AdminUsersPage = () => {
   const [roleFilter, setRoleFilter] = useState('');
   const [activeFilter, setActiveFilter] = useState('');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [confirmAction, setConfirmAction] = useState<'activate' | 'deactivate' | null>(
+  const [confirmAction, setConfirmAction] = useState<'activate' | 'deactivate' | 'delete' | null>(
     null,
   );
 
@@ -68,6 +68,20 @@ const AdminUsersPage = () => {
       toast.success('Email marked as verified. The user can now sign in.');
       setSelectedUser(response.data);
       void queryClient.invalidateQueries({ queryKey: ['adminUsers'] });
+    },
+    onError: (error: AxiosError<ApiErrorResponse>) => {
+      toast.error(extractErrorMessage(error));
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (userId: string) => adminApi.deleteUser(userId),
+    onSuccess: () => {
+      toast.success('User deleted.');
+      setConfirmAction(null);
+      setSelectedUser(null);
+      void queryClient.invalidateQueries({ queryKey: ['adminUsers'] });
+      void queryClient.invalidateQueries({ queryKey: ['adminDashboard'] });
     },
     onError: (error: AxiosError<ApiErrorResponse>) => {
       toast.error(extractErrorMessage(error));
@@ -216,6 +230,13 @@ const AdminUsersPage = () => {
                   Activate
                 </button>
               )}
+              <button
+                type="button"
+                onClick={() => setConfirmAction('delete')}
+                className="rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
+              >
+                Delete
+              </button>
             </>
           ) : undefined
         }
@@ -272,18 +293,36 @@ const AdminUsersPage = () => {
 
       <ConfirmActionModal
         open={confirmAction !== null}
-        title={confirmAction === 'deactivate' ? 'Deactivate user' : 'Activate user'}
+        title={
+          confirmAction === 'delete'
+            ? 'Delete user'
+            : confirmAction === 'deactivate'
+              ? 'Deactivate user'
+              : 'Activate user'
+        }
         message={
-          confirmAction === 'deactivate'
+          confirmAction === 'delete'
+            ? `Permanently delete ${selectedUser?.email}? This cannot be undone. Users with order history must be deactivated instead.`
+            : confirmAction === 'deactivate'
             ? `Deactivate ${selectedUser?.email}? They will no longer be able to sign in.`
             : `Activate ${selectedUser?.email}? They will regain access to the platform.`
         }
-        confirmLabel={confirmAction === 'deactivate' ? 'Deactivate' : 'Activate'}
-        confirmTone={confirmAction === 'deactivate' ? 'danger' : 'primary'}
-        isLoading={statusMutation.isPending}
+        confirmLabel={
+          confirmAction === 'delete'
+            ? 'Delete'
+            : confirmAction === 'deactivate'
+              ? 'Deactivate'
+              : 'Activate'
+        }
+        confirmTone={confirmAction === 'activate' ? 'primary' : 'danger'}
+        isLoading={statusMutation.isPending || deleteMutation.isPending}
         onCancel={() => setConfirmAction(null)}
         onConfirm={() => {
           if (!selectedUser || !confirmAction) return;
+          if (confirmAction === 'delete') {
+            deleteMutation.mutate(selectedUser.id);
+            return;
+          }
           statusMutation.mutate({
             userId: selectedUser.id,
             isActive: confirmAction === 'activate',

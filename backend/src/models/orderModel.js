@@ -5,6 +5,10 @@ export function findOrderById(id) {
   return db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
 }
 
+export function findOrdersByCheckoutGroup(groupId) {
+  return db.prepare('SELECT * FROM orders WHERE checkout_group_id = ? ORDER BY created_at, id').all(groupId);
+}
+
 export function findOrderItemById(id) {
   return db.prepare('SELECT * FROM order_items WHERE id = ?').get(id);
 }
@@ -13,13 +17,13 @@ export function findOrderItems(orderId) {
   return db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId);
 }
 
-export function createOrder({ buyer_id, organisation_id, supplier_id, status = 'PENDING', subtotal = 0, delivery_fee = 0, tax_amount = 0, total_amount = 0, currency = 'TZS', lpo_number, payment_terms = 'IMMEDIATE', notes }) {
+export function createOrder({ buyer_id, organisation_id, supplier_id, status = 'PENDING', subtotal = 0, delivery_fee = 0, tax_amount = 0, platform_fee_rate = 0, buyer_service_fee = 0, supplier_service_fee = 0, platform_revenue = 0, supplier_net_amount = 0, total_amount = 0, currency = 'TZS', lpo_number, payment_terms = 'IMMEDIATE', notes, checkout_group_id }) {
   const id = generateId();
   const now = nowISO();
   db.prepare(`
-    INSERT INTO orders (id, buyer_id, organisation_id, supplier_id, status, subtotal, delivery_fee, tax_amount, total_amount, currency, lpo_number, payment_terms, notes, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, buyer_id, organisation_id, supplier_id, status, subtotal, delivery_fee, tax_amount, total_amount, currency, lpo_number || null, payment_terms, notes || null, now, now);
+    INSERT INTO orders (id, buyer_id, organisation_id, supplier_id, status, subtotal, delivery_fee, tax_amount, platform_fee_rate, buyer_service_fee, supplier_service_fee, platform_revenue, supplier_net_amount, total_amount, currency, lpo_number, payment_terms, notes, checkout_group_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, buyer_id, organisation_id, supplier_id, status, subtotal, delivery_fee, tax_amount, platform_fee_rate, buyer_service_fee, supplier_service_fee, platform_revenue, supplier_net_amount, total_amount, currency, lpo_number || null, payment_terms, notes || null, checkout_group_id || id, now, now);
   return findOrderById(id);
 }
 

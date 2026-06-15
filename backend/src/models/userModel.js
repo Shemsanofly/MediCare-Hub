@@ -50,3 +50,7 @@ export function setUserVerified(id, isVerified) {
 export function updateUserPassword(id, password_hash) {
   db.prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?').run(password_hash, nowISO(), id);
 }
+
+export function deleteUser(id) {
+  db.prepare('DELETE FROM users WHERE id = ?').run(id);
+}

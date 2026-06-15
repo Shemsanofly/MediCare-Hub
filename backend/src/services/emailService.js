@@ -193,6 +193,61 @@ export async function notifyOrderCreated(orderId) {
   }
 }
 
+export async function notifySupplierOrderCreated(orderId) {
+  const order = getOrderRow(orderId);
+  if (!order) return;
+  const supplier = supplierContact(order);
+  const ref = orderRef(order);
+  const total = `TZS ${formatDecimal(order.total_amount)}`;
+  const items = orderItemsText(order.id);
+  const itemsHtml = items.map((i) => `&bull; ${i}`).join('<br>');
+
+  if (supplier?.email) {
+    await sendMail({
+      to: supplier.email,
+      subject: `New order ${ref} received`,
+      category: 'Order Created',
+      text: `You have received a new order ${ref} (${total}).\n\n${items.map((i) => `- ${i}`).join('\n')}\n\nLog in to accept and fulfil it.`,
+      html: layout(`New order ${ref}`, [
+        `You have received a new order (${total}).`,
+        itemsHtml,
+        'Log in to your supplier portal to accept and fulfil it.',
+      ]),
+    });
+  }
+}
+
+export async function notifyBuyerGroupedOrderCreated(orderIds) {
+  if (!orderIds.length) return;
+  const orders = orderIds.map(getOrderRow).filter(Boolean);
+  if (!orders.length) return;
+
+  const buyer = buyerContact(orders[0]);
+  if (!buyer?.email) return;
+
+  const groupRef = (orders[0].checkout_group_id || orders[0].id).slice(0, 8).toUpperCase();
+  const totalAmount = orders.reduce((sum, order) => sum + Number(order.total_amount), 0);
+  const supplierLines = orders.map((order) => {
+    const supplier = supplierContact(order);
+    const items = orderItemsText(order.id).join(', ');
+    return `${supplier?.org_name || 'Supplier'}: ${items}`;
+  });
+
+  await sendMail({
+    to: buyer.email,
+    subject: `Order ${groupRef} placed`,
+    category: 'Order Created',
+    text: `Hi ${buyer.first_name || ''},\n\nYour order ${groupRef} (TZS ${formatDecimal(totalAmount)}) has been placed with ${orders.length} supplier${orders.length === 1 ? '' : 's'}.\n\n${supplierLines.map((line) => `- ${line}`).join('\n')}\n\nWe'll email you as it progresses.`,
+    html: layout(`Order ${groupRef} placed`, [
+      `Hi ${buyer.first_name || 'there'},`,
+      `Your order has been placed with <strong>${orders.length} supplier${orders.length === 1 ? '' : 's'}</strong>.`,
+      supplierLines.map((line) => `&bull; ${line}`).join('<br>'),
+      `<strong>Total: TZS ${formatDecimal(totalAmount)}</strong>`,
+      "We'll keep you posted as suppliers accept and fulfil their parts of the order.",
+    ]),
+  });
+}
+
 const STATUS_MESSAGE = {
   ACCEPTED: (ref, sup) => `Your order ${ref} has been accepted by ${sup} and is being prepared.`,
   SHIPPED: (ref) => `Good news — your order ${ref} has been shipped and is on its way.`,

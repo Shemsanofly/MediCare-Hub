@@ -29,6 +29,8 @@ export interface BackendOrderItem {
   id: string;
   product_id: string;
   product_name: string;
+  supplier_id?: string;
+  supplier_name?: string;
   batch_id: string | null;
   quantity_ordered: number;
   unit_price: string;
@@ -51,11 +53,20 @@ export interface BackendOrder {
   buyer_id: string;
   organisation_id: string;
   supplier_id: string;
+  checkout_group_id?: string;
+  is_multi_supplier?: boolean;
+  supplier_order_count?: number;
+  supplier_orders?: BackendOrder[];
   supplier_name: string;
   hospital_name?: string;
   subtotal: string;
   delivery_fee: string;
   tax_amount: string;
+  platform_fee_rate: string;
+  buyer_service_fee: string;
+  supplier_service_fee: string;
+  platform_revenue: string;
+  supplier_net_amount: string;
   total_amount: string;
   currency: string;
   lpo_number: string;
@@ -80,6 +91,7 @@ export interface CheckoutResponse {
   order: BackendOrder;
   orders?: BackendOrder[];
   count?: number;
+  supplier_order_count?: number;
   payment_instructions: string;
 }
 

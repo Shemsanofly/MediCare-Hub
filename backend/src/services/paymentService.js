@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import db from '../config/database.js';
 import { NotFoundError, ValidationError, ForbiddenError } from '../utils/errors.js';
-import { findOrderById, updateOrderStatus, addStatusHistory } from '../models/orderModel.js';
+import { findOrderById, findOrdersByCheckoutGroup, updateOrderStatus, addStatusHistory } from '../models/orderModel.js';
 import { findPaymentById, findPaymentByOrder, findPaymentByOrderIds, createPayment, updatePaymentStatus, createEscrow, findEscrowByOrder, updateEscrowStatus, createWebhookLog, updateWebhookLog, createPayout } from '../models/paymentModel.js';
 import { findSupplierById } from '../models/supplierModel.js';
 import { notifyPaymentCompleted } from './emailService.js';
@@ -10,45 +10,71 @@ import { formatDecimal, nowISO } from '../utils/helpers.js';
 const PLATFORM_COMMISSION_RATE = 0.05;
 
 export function initiatePayment(user, { order_id, payment_method, phone }) {
-  const order = findOrderById(order_id);
-  if (!order) throw new NotFoundError('Order not found');
+  const orders = resolvePayableOrders(order_id);
 
-  if (order.organisation_id !== user.organisation?.id && user.role !== 'ADMIN') {
+  if (!orders.every((order) => order.organisation_id === user.organisation?.id) && user.role !== 'ADMIN') {
     throw new ForbiddenError('You can only pay for your own orders');
   }
 
-  if (!['PENDING', 'ACCEPTED', 'APPROVED', 'CONFIRMED'].includes(order.status)) {
+  if (!orders.every((order) => ['PENDING', 'ACCEPTED', 'APPROVED', 'CONFIRMED'].includes(order.status))) {
     throw new ValidationError('This order can no longer be paid for');
   }
 
-  const existing = findPaymentByOrder(order_id);
-  if (existing && existing.status === 'COMPLETED') {
+  const existingPayments = orders.map((order) => findPaymentByOrder(order.id)).filter(Boolean);
+  if (existingPayments.length === orders.length && existingPayments.every((payment) => payment.status === 'COMPLETED')) {
     throw new ValidationError('Order is already paid');
   }
 
   const gateway = payment_method || 'mpesa';
-  const transactionReference = `TXN-${order_id}-${crypto.randomBytes(4).toString('hex')}`;
+  const displayOrderId = orders.length > 1 ? order_id : orders[0].id;
+  if (existingPayments.length) {
+    const groupReference = existingPayments[0].gateway_reference || `GW-${crypto.randomBytes(8).toString('hex')}`;
+    existingPayments.forEach((payment) => updatePaymentStatus(payment.id, { status: 'PENDING', gateway_reference: groupReference }));
+    return serializePayment({
+      ...findPaymentById(existingPayments[0].id),
+      order_id: displayOrderId,
+      amount: orders.reduce((sum, order) => sum + Number(order.total_amount), 0),
+    });
+  }
+
+  const baseReference = `TXN-${displayOrderId}-${crypto.randomBytes(4).toString('hex')}`;
   const gatewayReference = `GW-${crypto.randomBytes(8).toString('hex')}`;
 
-  const payment = createPayment({
-    order_id,
-    gateway,
-    amount: order.total_amount,
-    currency: order.currency,
-    transaction_reference: transactionReference,
-    gateway_reference: gatewayReference,
-  });
+  const payments = orders.map((order, index) =>
+    createPayment({
+      order_id: order.id,
+      gateway,
+      amount: order.total_amount,
+      currency: order.currency,
+      transaction_reference: orders.length > 1 ? `${baseReference}-${index + 1}` : baseReference,
+      gateway_reference: gatewayReference,
+    }),
+  );
 
   // In development / when gateway keys are empty, simulate immediate success
   const gatewayConfigured = process.env.SELCOM_API_KEY || process.env.MPESA_API_KEY || process.env.AIRTEL_API_KEY;
   if (!gatewayConfigured) {
     db.transaction(() => {
-      completePaymentInternal(payment.id, { gateway_reference: gatewayReference, gateway_response: { simulated: true, phone } });
+      payments.forEach((payment) => {
+        completePaymentInternal(payment.id, { gateway_reference: gatewayReference, gateway_response: { simulated: true, phone } });
+      });
     })();
-    void notifyPaymentCompleted(order_id);
+    payments.forEach((payment) => void notifyPaymentCompleted(payment.order_id));
   }
 
-  return serializePayment(findPaymentById(payment.id));
+  return serializePayment({
+    ...findPaymentById(payments[0].id),
+    order_id: displayOrderId,
+    amount: orders.reduce((sum, order) => sum + Number(order.total_amount), 0),
+  });
+}
+
+function resolvePayableOrders(orderIdOrGroupId) {
+  const order = findOrderById(orderIdOrGroupId);
+  if (order) return [order];
+  const groupedOrders = findOrdersByCheckoutGroup(orderIdOrGroupId);
+  if (!groupedOrders.length) throw new NotFoundError('Order not found');
+  return groupedOrders;
 }
 
 export function completePaymentInternal(paymentId, { gateway_reference, gateway_response }) {
@@ -185,8 +211,8 @@ export function releaseEscrowForOrder(orderId) {
   db.transaction(() => {
     updateEscrowStatus(escrow.id, { status: 'RELEASED', released_at: nowISO() });
 
-    const commission = escrow.amount_held * PLATFORM_COMMISSION_RATE;
-    const supplierAmount = escrow.amount_held - commission;
+    const commission = Number(order.platform_revenue) || escrow.amount_held * PLATFORM_COMMISSION_RATE;
+    const supplierAmount = Number(order.supplier_net_amount) || escrow.amount_held - commission;
 
     createPayout({
       escrow_account_id: escrow.id,

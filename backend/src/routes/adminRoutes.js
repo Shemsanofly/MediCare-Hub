@@ -5,11 +5,13 @@ import {
   listUsers,
   getUser,
   patchUser,
+  deleteUser,
   userQueryValidation,
   listSuppliers,
   getSupplier,
   verifySupplierHandler,
   rejectSupplierHandler,
+  deleteSupplier,
   supplierQueryValidation,
   listProducts,
   getProduct,
@@ -26,6 +28,7 @@ const router = Router();
 router.get('/users/', authenticate, requireRoles('ADMIN'), userQueryValidation, validate, listUsers);
 router.get('/users/:id/', authenticate, requireRoles('ADMIN'), getUser);
 router.patch('/users/:id/', authenticate, requireRoles('ADMIN'), patchUser);
+router.delete('/users/:id/', authenticate, requireRoles('ADMIN'), deleteUser);
 
 router.get('/suppliers/', authenticate, requireRoles('ADMIN'), supplierQueryValidation, validate, listSuppliers);
 router.get('/suppliers/:id/', authenticate, requireRoles('ADMIN'), getSupplier);
@@ -33,6 +36,7 @@ router.post('/suppliers/:id/verify/', authenticate, requireRoles('ADMIN'), verif
 router.patch('/suppliers/:id/verify/', authenticate, requireRoles('ADMIN'), verifySupplierHandler);
 router.post('/suppliers/:id/reject/', authenticate, requireRoles('ADMIN'), rejectSupplierHandler);
 router.patch('/suppliers/:id/reject/', authenticate, requireRoles('ADMIN'), rejectSupplierHandler);
+router.delete('/suppliers/:id/', authenticate, requireRoles('ADMIN'), deleteSupplier);
 
 router.get('/products/', authenticate, requireRoles('ADMIN'), productQueryValidation, validate, listProducts);
 router.get('/products/:id/', authenticate, requireRoles('ADMIN'), getProduct);

@@ -30,6 +30,9 @@ export const adminApi = {
   updateUser: (userId: string, payload: { is_active?: boolean; is_verified?: boolean }) =>
     apiClient.patch<User>(`/admin/users/${userId}/`, payload),
 
+  deleteUser: (userId: string) =>
+    apiClient.delete(`/admin/users/${userId}/`),
+
   listSuppliers: (params?: { search?: string; status?: string }) =>
     apiClient.get<{ results: AdminSupplier[] }>('/admin/suppliers/', { params }),
 
@@ -43,6 +46,9 @@ export const adminApi = {
     apiClient.patch<AdminSupplier>(`/admin/suppliers/${supplierId}/reject/`, {
       reason,
     }),
+
+  deleteSupplier: (supplierId: string) =>
+    apiClient.delete(`/admin/suppliers/${supplierId}/`),
 
   listProducts: (params?: {
     search?: string;

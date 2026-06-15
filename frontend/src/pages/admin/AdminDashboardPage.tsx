@@ -17,6 +17,7 @@ import LoadingSpinner from '@/components/dashboard/LoadingSpinner';
 import QuickActionCard from '@/components/dashboard/QuickActionCard';
 import StatCard from '@/components/dashboard/StatCard';
 import StatusBadge from '@/components/dashboard/StatusBadge';
+import { ChartContainer, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import type { AxiosError } from 'axios';
 import type { ApiErrorResponse } from '@/types';
 
@@ -26,6 +27,13 @@ const formatTZS = (amount: string | number, currency = 'TZS') =>
     currency,
     maximumFractionDigits: 0,
   }).format(Number(amount));
+
+const revenueChartConfig = {
+  amount: {
+    label: 'Revenue',
+    color: '#1B4F8C',
+  },
+} satisfies ChartConfig;
 
 const AdminDashboardPage = () => {
   const summaryQuery = useQuery({
@@ -77,22 +85,62 @@ const AdminDashboardPage = () => {
       </section>
 
       <section className="rounded-xl border border-gray-100 bg-white shadow-sm">
-        <div className="border-b border-gray-100 px-5 py-4">
-          <h2 className="font-semibold text-gray-900">Revenue Overview</h2>
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 px-5 py-4">
+          <div>
+            <h2 className="font-semibold text-gray-900">Revenue Overview</h2>
+            <p className="mt-1 text-sm text-gray-500">MediCare fees from completed payments</p>
+          </div>
+          <div className="rounded-lg border border-primary-100 bg-primary-50 px-3 py-2 text-right">
+            <p className="text-xs font-medium text-primary-700">Total</p>
+            <p className="text-sm font-semibold text-primary">
+              {formatTZS(data.platform_revenue, data.currency)}
+            </p>
+          </div>
         </div>
         {data.revenue_overview.length === 0 ? (
           <p className="p-6 text-sm text-gray-500">No revenue data yet.</p>
         ) : (
-          <div className="p-4">
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={data.revenue_overview}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(v) => formatTZS(Number(v ?? 0), data.currency)} />
-                <Bar dataKey="amount" fill="#D68910" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="p-5">
+            <ChartContainer config={revenueChartConfig}>
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={data.revenue_overview} margin={{ left: 0, right: 10, top: 8 }}>
+                  <CartesianGrid vertical={false} stroke="#e5e7eb" />
+                  <XAxis
+                    dataKey="month"
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={10}
+                    tick={{ fontSize: 12, fill: '#6b7280' }}
+                  />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={8}
+                    width={72}
+                    tick={{ fontSize: 12, fill: '#6b7280' }}
+                    tickFormatter={(value) => formatTZS(value, data.currency)}
+                  />
+                  <Tooltip
+                    cursor={{ fill: '#EBF2FA' }}
+                    content={({ active, payload, label }) => (
+                      <ChartTooltipContent
+                        active={active}
+                        payload={payload}
+                        label={label}
+                        config={revenueChartConfig}
+                        valueFormatter={(value) => formatTZS(value, data.currency)}
+                      />
+                    )}
+                  />
+                  <Bar
+                    dataKey="amount"
+                    fill="var(--color-amount)"
+                    radius={[6, 6, 0, 0]}
+                    maxBarSize={52}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartContainer>
           </div>
         )}
       </section>
