@@ -206,11 +206,17 @@ export function initDatabase() {
       subtotal REAL NOT NULL DEFAULT 0,
       delivery_fee REAL NOT NULL DEFAULT 0,
       tax_amount REAL NOT NULL DEFAULT 0,
+      platform_fee_rate REAL NOT NULL DEFAULT 0,
+      buyer_service_fee REAL NOT NULL DEFAULT 0,
+      supplier_service_fee REAL NOT NULL DEFAULT 0,
+      platform_revenue REAL NOT NULL DEFAULT 0,
+      supplier_net_amount REAL NOT NULL DEFAULT 0,
       total_amount REAL NOT NULL DEFAULT 0,
       currency TEXT NOT NULL DEFAULT 'TZS',
       lpo_number TEXT,
       payment_terms TEXT NOT NULL DEFAULT 'IMMEDIATE' CHECK(payment_terms IN ('IMMEDIATE','NET30','NET60','NET90')),
       notes TEXT,
+      checkout_group_id TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
@@ -395,6 +401,32 @@ export function initDatabase() {
   `).get('code');
   if (!codeColumn || codeColumn.count === 0) {
     db.exec(`ALTER TABLE auth_tokens ADD COLUMN code TEXT;`);
+  }
+
+  // Migration: add shared checkout group for multi-supplier checkouts (idempotent)
+  const checkoutGroupColumn = db.prepare(`
+    SELECT COUNT(*) AS count FROM pragma_table_info('orders') WHERE name = ?
+  `).get('checkout_group_id');
+  if (!checkoutGroupColumn || checkoutGroupColumn.count === 0) {
+    db.exec(`ALTER TABLE orders ADD COLUMN checkout_group_id TEXT;`);
+  }
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_orders_checkout_group ON orders(checkout_group_id);`);
+
+  // Migration: add platform revenue split fields to orders (idempotent)
+  const revenueColumns = [
+    'platform_fee_rate',
+    'buyer_service_fee',
+    'supplier_service_fee',
+    'platform_revenue',
+    'supplier_net_amount',
+  ];
+  for (const col of revenueColumns) {
+    const exists = db.prepare(`
+      SELECT COUNT(*) AS count FROM pragma_table_info('orders') WHERE name = ?
+    `).get(col);
+    if (!exists || exists.count === 0) {
+      db.exec(`ALTER TABLE orders ADD COLUMN ${col} REAL NOT NULL DEFAULT 0;`);
+    }
   }
 
   // Insert default product categories if they do not exist

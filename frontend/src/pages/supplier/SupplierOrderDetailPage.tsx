@@ -132,6 +132,36 @@ const SupplierOrderDetailPage = () => {
       </div>
 
       <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+        <h2 className="mb-3 text-lg font-semibold">Revenue split</h2>
+        <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <dt className="text-gray-500">Gross sale</dt>
+            <dd className="font-medium text-gray-900">
+              {formatTZS(order.subtotal, order.currency)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-gray-500">MediCare fee rate</dt>
+            <dd className="font-medium text-gray-900">
+              {Number(order.platform_fee_rate || 0).toFixed(2)}%
+            </dd>
+          </div>
+          <div>
+            <dt className="text-gray-500">Supplier service fee</dt>
+            <dd className="font-medium text-gray-900">
+              {formatTZS(order.supplier_service_fee || 0, order.currency)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-gray-500">Net supplier revenue</dt>
+            <dd className="font-medium text-gray-900">
+              {formatTZS(order.supplier_net_amount || 0, order.currency)}
+            </dd>
+          </div>
+        </dl>
+      </section>
+
+      <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
         <h2 className="mb-4 text-sm font-semibold text-gray-900">Fulfillment progress</h2>
         <StatusProgressTracker status={status} />
       </section>

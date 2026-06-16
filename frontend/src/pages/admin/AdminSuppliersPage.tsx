@@ -22,7 +22,7 @@ const AdminSuppliersPage = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [selectedSupplier, setSelectedSupplier] = useState<AdminSupplier | null>(null);
-  const [confirmAction, setConfirmAction] = useState<'verify' | 'reject' | null>(null);
+  const [confirmAction, setConfirmAction] = useState<'verify' | 'reject' | 'delete' | null>(null);
   const [rejectReason, setRejectReason] = useState('');
 
   const queryParams = useMemo(
@@ -64,6 +64,22 @@ const AdminSuppliersPage = () => {
       setRejectReason('');
       setSelectedSupplier(response.data);
       void queryClient.invalidateQueries({ queryKey: ['adminSuppliers'] });
+      void queryClient.invalidateQueries({ queryKey: ['adminDashboard'] });
+    },
+    onError: (error: AxiosError<ApiErrorResponse>) => {
+      toast.error(extractErrorMessage(error));
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (supplierId: string) => adminApi.deleteSupplier(supplierId),
+    onSuccess: () => {
+      toast.success('Supplier deleted.');
+      setConfirmAction(null);
+      setRejectReason('');
+      setSelectedSupplier(null);
+      void queryClient.invalidateQueries({ queryKey: ['adminSuppliers'] });
+      void queryClient.invalidateQueries({ queryKey: ['adminProducts'] });
       void queryClient.invalidateQueries({ queryKey: ['adminDashboard'] });
     },
     onError: (error: AxiosError<ApiErrorResponse>) => {
@@ -159,31 +175,43 @@ const AdminSuppliersPage = () => {
           setRejectReason('');
         }}
         actions={
-          selectedSupplier?.verification_status === 'PENDING' ? (
+          selectedSupplier ? (
             <>
+              {selectedSupplier.verification_status === 'PENDING' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmAction('reject')}
+                    className="rounded-lg border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
+                  >
+                    Reject
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmAction('verify')}
+                    className="rounded-lg bg-secondary px-4 py-2 text-sm font-semibold text-white hover:bg-secondary-600"
+                  >
+                    Approve
+                  </button>
+                </>
+              )}
               <button
                 type="button"
-                onClick={() => setConfirmAction('reject')}
-                className="rounded-lg border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
+                onClick={() => setConfirmAction('delete')}
+                className="rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
               >
-                Reject
+                Delete
               </button>
               <button
                 type="button"
-                onClick={() => setConfirmAction('verify')}
-                className="rounded-lg bg-secondary px-4 py-2 text-sm font-semibold text-white hover:bg-secondary-600"
+                onClick={() => setSelectedSupplier(null)}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
               >
-                Approve
+                Close
               </button>
             </>
           ) : (
-            <button
-              type="button"
-              onClick={() => setSelectedSupplier(null)}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-            >
-              Close
-            </button>
+            <></>
           )
         }
       >
@@ -250,6 +278,20 @@ const AdminSuppliersPage = () => {
         onConfirm={() => {
           if (!selectedSupplier) return;
           verifyMutation.mutate(selectedSupplier.id);
+        }}
+      />
+
+      <ConfirmActionModal
+        open={confirmAction === 'delete'}
+        title="Delete supplier"
+        message={`Permanently delete ${selectedSupplier?.organisation_name}? This removes the supplier account, listings, products, inventory, and pending cart references. Suppliers with order history must be rejected or suspended instead.`}
+        confirmLabel="Delete"
+        confirmTone="danger"
+        isLoading={deleteMutation.isPending}
+        onCancel={() => setConfirmAction(null)}
+        onConfirm={() => {
+          if (!selectedSupplier) return;
+          deleteMutation.mutate(selectedSupplier.id);
         }}
       />
 

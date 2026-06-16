@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import db from '../config/database.js';
 import { NotFoundError, ValidationError, ForbiddenError } from '../utils/errors.js';
-import { findOrderById, updateOrderStatus, addStatusHistory } from '../models/orderModel.js';
+import { findOrderById, findOrdersByCheckoutGroup } from '../models/orderModel.js';
 import { findPaymentById, findPaymentByOrder, createPayment, updatePaymentStatus, createEscrow, findEscrowByOrder } from '../models/paymentModel.js';
 import { formatDecimal, nowISO } from '../utils/helpers.js';
 import { completePaymentInternal } from './paymentService.js';
@@ -26,44 +26,58 @@ export function getPaymentMethod(methodId) {
 }
 
 export function initiateSimulation(user, { order_id, payment_method, phone }) {
-  const order = findOrderById(order_id);
-  if (!order) throw new NotFoundError('Order not found');
+  const orders = resolvePayableOrders(order_id);
+  const order = orders[0];
 
-  if (order.organisation_id !== user.organisation?.id && user.role !== 'ADMIN') {
+  if (!orders.every((o) => o.organisation_id === user.organisation?.id) && user.role !== 'ADMIN') {
     throw new ForbiddenError('You can only pay for your own orders');
   }
 
-  if (!['PENDING', 'ACCEPTED', 'APPROVED', 'CONFIRMED'].includes(order.status)) {
+  if (!orders.every((o) => ['PENDING', 'ACCEPTED', 'APPROVED', 'CONFIRMED'].includes(o.status))) {
     throw new ValidationError('This order can no longer be paid for');
   }
 
   const method = getPaymentMethod(payment_method);
   if (!method) throw new ValidationError('Unsupported payment method');
 
-  const existing = findPaymentByOrder(order_id);
-  if (existing?.status === 'COMPLETED') {
+  const existingPayments = orders.map((o) => findPaymentByOrder(o.id)).filter(Boolean);
+  if (existingPayments.length === orders.length && existingPayments.every((p) => p.status === 'COMPLETED')) {
     throw new ValidationError('Order is already paid');
   }
 
-  if (existing) {
+  const totalAmount = orders.reduce((sum, o) => sum + Number(o.total_amount), 0);
+  const displayOrderId = orders.length > 1 ? order_id : order.id;
+
+  if (existingPayments.length) {
     // Reset existing pending/processing payment to new simulation
-    updatePaymentStatus(existing.id, { status: 'PENDING' });
-    return buildSimulationResponse(existing, method, phone);
+    const groupReference = existingPayments[0].gateway_reference || `GW-${crypto.randomBytes(8).toString('hex')}`;
+    existingPayments.forEach((payment) => updatePaymentStatus(payment.id, { status: 'PENDING', gateway_reference: groupReference }));
+    return buildSimulationResponse({ ...existingPayments[0], order_id: displayOrderId, amount: totalAmount }, method, phone);
   }
 
-  const transactionReference = `SIM-${order_id}-${crypto.randomBytes(4).toString('hex')}`;
   const gatewayReference = `GW-${crypto.randomBytes(8).toString('hex')}`;
+  const baseReference = `SIM-${displayOrderId}-${crypto.randomBytes(4).toString('hex')}`;
 
-  const payment = createPayment({
-    order_id,
-    gateway: payment_method,
-    amount: order.total_amount,
-    currency: order.currency,
-    transaction_reference: transactionReference,
-    gateway_reference: gatewayReference,
-  });
+  const payments = orders.map((payableOrder, index) =>
+    createPayment({
+      order_id: payableOrder.id,
+      gateway: payment_method,
+      amount: payableOrder.total_amount,
+      currency: payableOrder.currency,
+      transaction_reference: orders.length > 1 ? `${baseReference}-${index + 1}` : baseReference,
+      gateway_reference: gatewayReference,
+    }),
+  );
 
-  return buildSimulationResponse(payment, method, phone);
+  return buildSimulationResponse({ ...payments[0], order_id: displayOrderId, amount: totalAmount }, method, phone);
+}
+
+function resolvePayableOrders(orderIdOrGroupId) {
+  const order = findOrderById(orderIdOrGroupId);
+  if (order) return [order];
+  const groupedOrders = findOrdersByCheckoutGroup(orderIdOrGroupId);
+  if (!groupedOrders.length) throw new NotFoundError('Order not found');
+  return groupedOrders;
 }
 
 function buildSimulationResponse(payment, method, phone) {
@@ -157,21 +171,31 @@ export function completeSimulation(user, paymentId) {
     return { payment: serializeSimulatedPayment(payment), already_completed: true };
   }
 
+  const relatedPayments = payment.gateway_reference
+    ? db.prepare('SELECT * FROM payments WHERE gateway_reference = ?').all(payment.gateway_reference)
+    : [payment];
+
   db.transaction(() => {
-    completePaymentInternal(payment.id, {
-      gateway_reference: payment.gateway_reference,
-      gateway_response: {
-        simulated: true,
-        method: payment.gateway,
-        completed_at: nowISO(),
-      },
-    });
+    for (const relatedPayment of relatedPayments) {
+      completePaymentInternal(relatedPayment.id, {
+        gateway_reference: relatedPayment.gateway_reference,
+        gateway_response: {
+          simulated: true,
+          method: relatedPayment.gateway,
+          completed_at: nowISO(),
+        },
+      });
+    }
   })();
 
-  void notifyPaymentCompleted(payment.order_id);
+  relatedPayments.forEach((relatedPayment) => void notifyPaymentCompleted(relatedPayment.order_id));
 
   return {
-    payment: serializeSimulatedPayment(findPaymentById(paymentId)),
+    payment: serializeSimulatedPayment({
+      ...findPaymentById(paymentId),
+      amount: relatedPayments.reduce((sum, p) => sum + Number(p.amount), 0),
+      order_id: relatedPayments.length > 1 ? order.checkout_group_id : order.id,
+    }),
     order_status: 'PAID',
   };
 }

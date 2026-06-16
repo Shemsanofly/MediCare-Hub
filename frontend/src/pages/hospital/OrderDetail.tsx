@@ -131,7 +131,18 @@ const OrderDetail = () => {
   const order = orderQuery.data;
 
   if (orderQuery.isLoading) {
-    return <Skeleton className="h-64 w-full rounded-xl" />;
+    return (
+      <div className="space-y-4" role="status" aria-live="polite">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Loading order details…</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Fetching the latest supplier fulfilment and payment information.
+          </p>
+        </div>
+        <Skeleton className="h-40 w-full rounded-xl" />
+        <Skeleton className="h-28 w-full rounded-xl" />
+      </div>
+    );
   }
 
   if (!order) {
@@ -159,6 +170,34 @@ const OrderDetail = () => {
           {order.id.slice(0, 8).toUpperCase()} · {order.supplier_name}
         </p>
       </div>
+
+      {order.is_multi_supplier && order.supplier_orders?.length ? (
+        <section className="rounded-xl border border-primary-100 bg-primary-50 p-5">
+          <h2 className="mb-3 text-sm font-semibold text-gray-900">Supplier fulfilment</h2>
+          <div className="grid gap-3 md:grid-cols-2">
+            {order.supplier_orders.map((supplierOrder) => (
+              <div
+                key={supplierOrder.id}
+                className="rounded-lg border border-primary-100 bg-white p-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-medium text-gray-900">{supplierOrder.supplier_name}</p>
+                    <p className="text-xs text-gray-500">
+                      {supplierOrder.items.length} line item
+                      {supplierOrder.items.length === 1 ? '' : 's'}
+                    </p>
+                  </div>
+                  <StatusBadge status={supplierOrder.status} />
+                </div>
+                <p className="mt-2 text-sm font-semibold text-primary">
+                  {formatTZS(supplierOrder.total_amount, supplierOrder.currency)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
         <h2 className="mb-4 text-sm font-semibold text-gray-900">Order progress</h2>
@@ -240,6 +279,28 @@ const OrderDetail = () => {
             <dt className="text-gray-500">Total</dt>
             <dd className="font-medium">
               {formatTZS(order.total_amount, order.currency)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-gray-500">MediCare fee rate</dt>
+            <dd className="font-medium">{Number(order.platform_fee_rate || 0).toFixed(2)}%</dd>
+          </div>
+          <div>
+            <dt className="text-gray-500">Buyer service fee</dt>
+            <dd className="font-medium">
+              {formatTZS(order.buyer_service_fee || 0, order.currency)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-gray-500">Supplier service fee</dt>
+            <dd className="font-medium">
+              {formatTZS(order.supplier_service_fee || 0, order.currency)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-gray-500">MediCare revenue</dt>
+            <dd className="font-medium">
+              {formatTZS(order.platform_revenue || 0, order.currency)}
             </dd>
           </div>
           <div>

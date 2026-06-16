@@ -191,6 +191,36 @@ const AdminOrdersPage = () => {
                 </dd>
               </div>
               <div>
+                <dt className="text-gray-500">MediCare fee rate</dt>
+                <dd className="font-medium text-gray-900">
+                  {Number(selectedOrder.platform_fee_rate || 0).toFixed(2)}%
+                </dd>
+              </div>
+              <div>
+                <dt className="text-gray-500">Buyer service fee</dt>
+                <dd className="font-medium text-gray-900">
+                  {formatTZS(selectedOrder.buyer_service_fee || 0, selectedOrder.currency)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-gray-500">Supplier service fee</dt>
+                <dd className="font-medium text-gray-900">
+                  {formatTZS(selectedOrder.supplier_service_fee || 0, selectedOrder.currency)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-gray-500">MediCare revenue</dt>
+                <dd className="font-medium text-gray-900">
+                  {formatTZS(selectedOrder.platform_revenue || 0, selectedOrder.currency)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-gray-500">Supplier net</dt>
+                <dd className="font-medium text-gray-900">
+                  {formatTZS(selectedOrder.supplier_net_amount || 0, selectedOrder.currency)}
+                </dd>
+              </div>
+              <div>
                 <dt className="text-gray-500">Total</dt>
                 <dd className="font-medium text-gray-900">
                   {formatTZS(selectedOrder.total_amount, selectedOrder.currency)}

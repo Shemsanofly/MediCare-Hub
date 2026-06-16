@@ -63,8 +63,18 @@ const SupplierDashboardPage = () => {
         <StatCard title="Orders Received" value={data.total_orders_received} accent="primary" />
         <StatCard title="Pending Orders" value={data.pending_orders} accent="accent" />
         <StatCard
-          title="Total Revenue"
+          title="Gross Sales"
           value={formatTZS(data.total_revenue, data.currency)}
+          accent="secondary"
+        />
+        <StatCard
+          title="Service Fees"
+          value={formatTZS(data.total_service_fees, data.currency)}
+          accent="accent"
+        />
+        <StatCard
+          title="Net Revenue"
+          value={formatTZS(data.net_revenue, data.currency)}
           accent="secondary"
         />
       </section>

@@ -104,6 +104,8 @@ export function getSupplierDashboard(user, { limit = 5 } = {}) {
       total_orders_received: 0,
       pending_orders: 0,
       total_revenue: '0.00',
+      total_service_fees: '0.00',
+      net_revenue: '0.00',
       currency: 'TZS',
       my_products: [],
       recent_orders: [],
@@ -130,19 +132,25 @@ export function getSupplierDashboard(user, { limit = 5 } = {}) {
 
   const totalOrders = db.prepare('SELECT COUNT(*) as c FROM orders WHERE supplier_id = ?').get(supplier.id).c;
   const pendingOrders = db.prepare("SELECT COUNT(*) as c FROM orders WHERE supplier_id = ? AND status IN ('PENDING','ACCEPTED','APPROVED','CONFIRMED','PAID','PREPARING','PROCESSING')").get(supplier.id).c;
-  const revenue = db.prepare(`
-    SELECT COALESCE(SUM(total_amount), 0) as total FROM orders
-    WHERE supplier_id = ? AND status IN ('PAID','COMPLETED','DELIVERED')
-  `).get(supplier.id).total;
+  const revenueTotals = db.prepare(`
+    SELECT
+      COALESCE(SUM(subtotal), 0) as gross,
+      COALESCE(SUM(supplier_service_fee), 0) as fees,
+      COALESCE(SUM(supplier_net_amount), 0) as net
+    FROM orders
+    WHERE supplier_id = ?
+      AND EXISTS (SELECT 1 FROM payments p WHERE p.order_id = orders.id AND p.status = 'COMPLETED')
+  `).get(supplier.id);
 
   const orders = db.prepare(`
     SELECT * FROM orders WHERE supplier_id = ? ORDER BY created_at DESC LIMIT ?
   `).all(supplier.id, limit).map((o) => findOrderById(o.id)).map(serializeOrder);
 
   const salesSummary = db.prepare(`
-    SELECT strftime('%Y-%m', created_at) as month, COALESCE(SUM(total_amount), 0) as amount
+    SELECT strftime('%Y-%m', created_at) as month, COALESCE(SUM(supplier_net_amount), 0) as amount
     FROM orders
-    WHERE supplier_id = ? AND status IN ('PAID','COMPLETED')
+    WHERE supplier_id = ?
+      AND EXISTS (SELECT 1 FROM payments p WHERE p.order_id = orders.id AND p.status = 'COMPLETED')
     GROUP BY month ORDER BY month DESC LIMIT 6
   `).all(supplier.id);
 
@@ -162,7 +170,9 @@ export function getSupplierDashboard(user, { limit = 5 } = {}) {
     low_stock_products: lowStockProducts,
     total_orders_received: totalOrders,
     pending_orders: pendingOrders,
-    total_revenue: formatDecimal(revenue),
+    total_revenue: formatDecimal(revenueTotals.gross),
+    total_service_fees: formatDecimal(revenueTotals.fees),
+    net_revenue: formatDecimal(revenueTotals.net),
     currency: 'TZS',
     my_products: products.map((p) => ({
       id: p.id,
@@ -200,7 +210,9 @@ export function getSupplierDashboard(user, { limit = 5 } = {}) {
       total_products: totalProducts,
       active_products: activeProducts,
       pending_orders: pendingOrders,
-      total_revenue: formatDecimal(revenue),
+      total_revenue: formatDecimal(revenueTotals.gross),
+      total_service_fees: formatDecimal(revenueTotals.fees),
+      net_revenue: formatDecimal(revenueTotals.net),
     },
   };
 }
@@ -213,7 +225,9 @@ export function getAdminDashboard({ limit = 5 } = {}) {
   const totalProducts = db.prepare('SELECT COUNT(*) as c FROM products').get().c;
   const totalOrders = db.prepare('SELECT COUNT(*) as c FROM orders').get().c;
   const platformRevenue = db.prepare(`
-    SELECT COALESCE(SUM(amount_held * 0.05), 0) as total FROM escrow_accounts WHERE status = 'RELEASED'
+    SELECT COALESCE(SUM(platform_revenue), 0) as total
+    FROM orders
+    WHERE EXISTS (SELECT 1 FROM payments p WHERE p.order_id = orders.id AND p.status = 'COMPLETED')
   `).get().total;
 
   const recentUsers = db.prepare(`
@@ -259,8 +273,9 @@ export function getAdminDashboard({ limit = 5 } = {}) {
   }));
 
   const revenueOverview = db.prepare(`
-    SELECT strftime('%Y-%m', held_at) as month, COALESCE(SUM(amount_held * 0.05), 0) as amount
-    FROM escrow_accounts WHERE status = 'RELEASED'
+    SELECT strftime('%Y-%m', created_at) as month, COALESCE(SUM(platform_revenue), 0) as amount
+    FROM orders
+    WHERE EXISTS (SELECT 1 FROM payments p WHERE p.order_id = orders.id AND p.status = 'COMPLETED')
     GROUP BY month ORDER BY month DESC LIMIT 6
   `).all().map((r) => ({ month: r.month, amount: formatDecimal(r.amount) }));
 

@@ -82,6 +82,8 @@ export interface SupplierDashboardSummary {
   total_orders_received: number;
   pending_orders: number;
   total_revenue: string;
+  total_service_fees: string;
+  net_revenue: string;
   currency: string;
   my_products: SupplierProductSummary[];
   recent_orders: BackendOrder[];

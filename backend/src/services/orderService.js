@@ -7,6 +7,7 @@ import {
   createOrder,
   createOrderItem,
   findOrderById,
+  findOrdersByCheckoutGroup,
   findOrderItems,
   updateOrderStatus,
   addStatusHistory,
@@ -22,8 +23,9 @@ import {
   fulfillReservations,
 } from '../models/orderModel.js';
 import { findPaymentByOrder } from '../models/paymentModel.js';
-import { notifyOrderCreated, notifyOrderStatus } from './emailService.js';
-import { formatDecimal, nowISO } from '../utils/helpers.js';
+import { notifyBuyerGroupedOrderCreated, notifySupplierOrderCreated, notifyOrderStatus } from './emailService.js';
+import { formatDecimal, generateId, nowISO } from '../utils/helpers.js';
+import { calculateRevenueSplit, serializeRevenueFields } from './revenueService.js';
 
 const APPROVAL_THRESHOLDS = [
   { role: 'HOD', amount: 500_000 },
@@ -92,6 +94,7 @@ export function checkout(user, { notes, payment_terms = 'IMMEDIATE', delivery_fe
   const checkoutTaxAmount = parseFloat(tax_amount) || 0;
 
   // Build one order per supplier inside a single transaction.
+  const checkoutGroupId = generateId();
   const tx = db.transaction(() => {
     const createdOrderIds = [];
     let isFirstOrder = true;
@@ -105,6 +108,7 @@ export function checkout(user, { notes, payment_terms = 'IMMEDIATE', delivery_fe
         buyer_id: user.id,
         organisation_id: user.organisation.id,
         supplier_id: supplierId,
+        checkout_group_id: checkoutGroupId,
         status: 'PENDING',
         subtotal: 0,
         delivery_fee: orderDeliveryFee,
@@ -175,8 +179,28 @@ export function checkout(user, { notes, payment_terms = 'IMMEDIATE', delivery_fe
         );
       }
 
-      const total = subtotal + order.delivery_fee + order.tax_amount;
-      db.prepare('UPDATE orders SET subtotal = ?, total_amount = ? WHERE id = ?').run(subtotal, total, order.id);
+      const revenue = calculateRevenueSplit(subtotal);
+      const total = subtotal + order.delivery_fee + order.tax_amount + revenue.buyer_service_fee;
+      db.prepare(`
+        UPDATE orders
+        SET subtotal = ?,
+            platform_fee_rate = ?,
+            buyer_service_fee = ?,
+            supplier_service_fee = ?,
+            platform_revenue = ?,
+            supplier_net_amount = ?,
+            total_amount = ?
+        WHERE id = ?
+      `).run(
+        subtotal,
+        revenue.platform_fee_rate,
+        revenue.buyer_service_fee,
+        revenue.supplier_service_fee,
+        revenue.platform_revenue,
+        revenue.supplier_net_amount,
+        total,
+        order.id,
+      );
 
       for (const step of determineApprovalSteps(total)) {
         createApprovalStep({ order_id: order.id, ...step });
@@ -191,17 +215,108 @@ export function checkout(user, { notes, payment_terms = 'IMMEDIATE', delivery_fe
   });
 
   const orderIds = tx();
-  orderIds.forEach((id) => void notifyOrderCreated(id));
+  void notifyBuyerGroupedOrderCreated(orderIds);
+  orderIds.forEach((id) => void notifySupplierOrderCreated(id));
   const orders = orderIds.map((id) => serializeOrder(findOrderById(id)));
+  const groupedOrder = serializeGroupedOrder(findOrdersByCheckoutGroup(checkoutGroupId));
 
   return {
     orders,
-    order: orders[0], // backwards-compatible: first order
-    count: orders.length,
+    order: groupedOrder,
+    count: 1,
+    supplier_order_count: orders.length,
     payment_instructions:
       orders.length > 1
-        ? `${orders.length} orders were created — one per supplier. Pay for each from your orders page once accepted.`
+        ? `${orders.length} supplier fulfilment orders were created under one checkout. Pay once from your orders page.`
         : 'Payment is due immediately. Use the payments API to initiate payment once the supplier accepts the order.',
+  };
+}
+
+function combineStatuses(orders) {
+  const statuses = orders.map((o) => o.status);
+  if (statuses.every((s) => s === statuses[0])) return statuses[0];
+  if (statuses.includes('DISPUTED')) return 'DISPUTED';
+  if (statuses.includes('CANCELLED')) return 'CANCELLED';
+  if (statuses.includes('REJECTED')) return 'REJECTED';
+  if (statuses.every((s) => s === 'COMPLETED')) return 'COMPLETED';
+  if (statuses.every((s) => ['DELIVERED', 'COMPLETED'].includes(s))) return 'DELIVERED';
+  if (statuses.every((s) => ['SHIPPED', 'DELIVERED', 'COMPLETED'].includes(s))) return 'SHIPPED';
+  if (statuses.some((s) => ['PAID', 'PROCESSING', 'PREPARING', 'SHIPPED', 'DELIVERED', 'COMPLETED'].includes(s))) return 'PROCESSING';
+  if (statuses.some((s) => ['ACCEPTED', 'APPROVED', 'CONFIRMED'].includes(s))) return 'ACCEPTED';
+  return 'PENDING';
+}
+
+export function serializeGroupedOrder(orders) {
+  if (!orders.length) throw new NotFoundError('Order not found');
+  if (orders.length === 1) {
+    const single = serializeOrder(orders[0]);
+    return {
+      ...single,
+      checkout_group_id: orders[0].checkout_group_id || orders[0].id,
+      is_multi_supplier: false,
+      supplier_order_count: 1,
+      supplier_orders: [single],
+    };
+  }
+
+  const first = orders[0];
+  const supplierOrders = orders.map(serializeOrder);
+  const totals = supplierOrders.reduce(
+    (sum, order) => ({
+      subtotal: sum.subtotal + Number(order.subtotal),
+      delivery_fee: sum.delivery_fee + Number(order.delivery_fee),
+      tax_amount: sum.tax_amount + Number(order.tax_amount),
+      buyer_service_fee: sum.buyer_service_fee + Number(order.buyer_service_fee),
+      supplier_service_fee: sum.supplier_service_fee + Number(order.supplier_service_fee),
+      platform_revenue: sum.platform_revenue + Number(order.platform_revenue),
+      supplier_net_amount: sum.supplier_net_amount + Number(order.supplier_net_amount),
+      total_amount: sum.total_amount + Number(order.total_amount),
+    }),
+    { subtotal: 0, delivery_fee: 0, tax_amount: 0, buyer_service_fee: 0, supplier_service_fee: 0, platform_revenue: 0, supplier_net_amount: 0, total_amount: 0 },
+  );
+  const payments = orders.map((order) => findPaymentByOrder(order.id)).filter(Boolean);
+  const allPaid = payments.length === orders.length && payments.every((payment) => payment.status === 'COMPLETED');
+  const items = supplierOrders.flatMap((order) =>
+    order.items.map((item) => ({
+      ...item,
+      supplier_id: order.supplier_id,
+      supplier_name: order.supplier_name,
+    })),
+  );
+
+  return {
+    id: first.checkout_group_id,
+    checkout_group_id: first.checkout_group_id,
+    is_multi_supplier: true,
+    supplier_order_count: supplierOrders.length,
+    supplier_orders: supplierOrders,
+    status: combineStatuses(orders),
+    buyer_id: first.buyer_id,
+    organisation_id: first.organisation_id,
+    supplier_id: 'MULTIPLE',
+    supplier_name: `${supplierOrders.length} suppliers`,
+    hospital_name: supplierOrders[0]?.hospital_name || 'Unknown',
+    subtotal: formatDecimal(totals.subtotal),
+    delivery_fee: formatDecimal(totals.delivery_fee),
+    tax_amount: formatDecimal(totals.tax_amount),
+    platform_fee_rate: formatDecimal((totals.subtotal > 0 ? totals.platform_revenue / totals.subtotal : 0) * 100),
+    buyer_service_fee: formatDecimal(totals.buyer_service_fee),
+    supplier_service_fee: formatDecimal(totals.supplier_service_fee),
+    platform_revenue: formatDecimal(totals.platform_revenue),
+    supplier_net_amount: formatDecimal(totals.supplier_net_amount),
+    total_amount: formatDecimal(totals.total_amount),
+    currency: first.currency,
+    lpo_number: first.lpo_number || '',
+    payment_terms: first.payment_terms,
+    notes: first.notes || '',
+    requires_approval: supplierOrders.some((order) => order.requires_approval),
+    approval_steps: supplierOrders.flatMap((order) => order.approval_steps),
+    items,
+    status_history: supplierOrders.flatMap((order) => order.status_history || []),
+    payment_status: allPaid ? 'COMPLETED' : payments[0]?.status || null,
+    payment_amount: allPaid ? formatDecimal(totals.total_amount) : payments[0] ? formatDecimal(payments[0].amount) : null,
+    created_at: first.created_at,
+    updated_at: orders.reduce((latest, order) => order.updated_at > latest ? order.updated_at : latest, first.updated_at),
   };
 }
 
@@ -260,11 +375,15 @@ export function serializeOrder(order) {
     buyer_id: order.buyer_id,
     organisation_id: order.organisation_id,
     supplier_id: order.supplier_id,
+    checkout_group_id: order.checkout_group_id || order.id,
+    is_multi_supplier: false,
+    supplier_order_count: 1,
     supplier_name: supplier?.organisation_name || 'Unknown',
     hospital_name: organisation?.name || 'Unknown',
     subtotal: formatDecimal(order.subtotal),
     delivery_fee: formatDecimal(order.delivery_fee),
     tax_amount: formatDecimal(order.tax_amount),
+    ...serializeRevenueFields(order),
     total_amount: formatDecimal(order.total_amount),
     currency: order.currency,
     lpo_number: order.lpo_number || '',
@@ -283,7 +402,15 @@ export function serializeOrder(order) {
 
 export function getOrder(id, user) {
   const order = findOrderById(id);
-  if (!order) throw new NotFoundError('Order not found');
+  if (!order) {
+    const groupedOrders = findOrdersByCheckoutGroup(id);
+    if (!groupedOrders.length) throw new NotFoundError('Order not found');
+    const ownsGroup = groupedOrders.some((groupOrder) => groupOrder.organisation_id === user.organisation?.id || groupOrder.buyer_id === user.id);
+    if (user.role !== 'ADMIN' && !ownsGroup) {
+      throw new ForbiddenError('You do not have access to this order');
+    }
+    return serializeGroupedOrder(groupedOrders);
+  }
 
   if (user.role !== 'ADMIN' &&
       order.buyer_id !== user.id &&
@@ -308,6 +435,13 @@ export function listMyOrders(user, { status, limit = 50, offset = 0 }) {
     }
   } else {
     orders = listOrdersForBuyerOrganisation(user.organisation?.id, { status, limit, offset });
+    const grouped = new Map();
+    for (const order of orders) {
+      const groupId = order.checkout_group_id || order.id;
+      if (!grouped.has(groupId)) grouped.set(groupId, []);
+      grouped.get(groupId).push(order);
+    }
+    return Array.from(grouped.values()).map(serializeGroupedOrder);
   }
   return orders.map(serializeOrder);
 }

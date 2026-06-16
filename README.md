@@ -15,7 +15,8 @@ MediCare Hub is a Business-to-Business (B2B) healthcare procurement platform tha
 - **Payments** — Stripe card payments (Checkout) plus a mobile-money (M-Pesa/Airtel/…) simulation
 - **Transactional email** — verification, password reset, order & payment notifications with PDF receipts (SMTP/Zoho)
 - **Role-based dashboards** — hospital, supplier, and admin summaries
-- **Admin portal** — users, suppliers, products, orders management
+- **Platform revenue** — tiered service fee on each order, split between buyer and supplier, with an admin revenue dashboard
+- **Admin portal** — manage users and suppliers (verify, reject, suspend, delete), products, and orders
 - **Analytics** — spending and procurement insights
 
 ## Technology Stack
@@ -275,6 +276,24 @@ npm run build
 | **Hospital** | Browse marketplace, cart, checkout, view orders, confirm delivery |
 | **Supplier** | Manage products & batches, process incoming orders |
 | **Admin** | Manage users, verify suppliers, oversee products and orders |
+
+## Platform Revenue Model
+
+Each order carries a **tiered platform service fee** based on the purchase amount. The
+fee is split evenly between the buyer (added on top) and the supplier (deducted from
+their payout), and the combined amount is recorded as platform revenue on the order.
+
+| Order subtotal (TZS) | Total service fee | Buyer / Supplier share |
+|----------------------|-------------------|------------------------|
+| `< 1,000`            | 0%                | — |
+| `1,000 – 9,999`      | 2%                | 1% each |
+| `10,000 – 999,999`   | 3%                | 1.5% each |
+| `≥ 1,000,000`        | 5%                | 2.5% each |
+
+Per-order revenue fields (`platform_fee_rate`, `buyer_service_fee`,
+`supplier_service_fee`, `platform_revenue`, `supplier_net_amount`) are persisted on the
+`orders` table and surfaced in the admin revenue dashboard. The split logic lives in
+`backend/src/services/revenueService.js`.
 
 ## API Overview
 
