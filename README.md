@@ -138,6 +138,44 @@ See `backend/.env.example` for the full list. **Never commit `.env` files or the
 
 > Email and Stripe are **optional and fail-safe**: if `SMTP_HOST` or `STRIPE_SECRET_KEY` is unset, those features are simply skipped and never block requests.
 
+### Enabling Stripe card payments in local dev
+
+By default card payments are **off** (blank `STRIPE_SECRET_KEY`), and checkout falls back to the mobile-money simulation. To test real Stripe Checkout locally:
+
+1. In the [Stripe Dashboard](https://dashboard.stripe.com/test/apikeys) (**Test mode**) → Developers → API keys, copy your test keys.
+2. In `backend/.env` set:
+
+   ```bash
+   STRIPE_SECRET_KEY=sk_test_...
+   STRIPE_PUBLISHABLE_KEY=pk_test_...
+   STRIPE_CURRENCY=usd                 # see "minimum charge" note below
+   APP_BASE_URL=http://localhost:3000  # the Vite frontend, NOT the API on :8000
+   ```
+
+   > ⚠️ **`APP_BASE_URL` must point at the frontend (`http://localhost:3000`), not the API (`:8000`).**
+   > After payment, Stripe redirects the browser to
+   > `${APP_BASE_URL}/hospital/orders/<id>?stripe=success&session_id=...`, and the React app reads
+   > that to confirm the order (`POST /api/v1/payments/stripe/confirm/`). Pointing `APP_BASE_URL`
+   > at `:8000` sends the user to the raw API instead and breaks the return flow.
+
+3. **Restart the backend** — env vars are read once at startup.
+4. Pay with a Stripe test card: **`4242 4242 4242 4242`**, any future expiry, any CVC and ZIP.
+
+**Minimum charge / currency:** Stripe enforces a per-currency minimum (~USD $0.50 equivalent). With the
+default `STRIPE_CURRENCY=tzs`, an order must total roughly **≥ 1,300 TZS** or Stripe rejects it with an
+"amount too small" error. For quick testing, set `STRIPE_CURRENCY=usd` and use a small order, or make sure
+the cart total clears the minimum.
+
+**Webhooks are optional locally.** Payment confirmation already happens when the browser returns from
+Checkout, so you don't need a webhook for local dev. To also exercise the webhook path, run the
+[Stripe CLI](https://stripe.com/docs/stripe-cli):
+
+```bash
+stripe listen --forward-to localhost:8000/api/v1/payments/webhooks/stripe/
+```
+
+then set the printed `whsec_...` signing secret as `STRIPE_WEBHOOK_SECRET` in `backend/.env` and restart.
+
 ## Deployment
 
 Production runs as **two long-lived processes behind a reverse proxy**:
