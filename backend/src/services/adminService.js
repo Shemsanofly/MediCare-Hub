@@ -1,12 +1,13 @@
 import db from '../config/database.js';
-import { ForbiddenError, NotFoundError, ValidationError } from '../utils/errors.js';
+import { ForbiddenError, NotFoundError } from '../utils/errors.js';
 import { normalizeUser } from '../middleware/auth.js';
-import { deleteUser, findUserById, setUserActive, setUserVerified } from '../models/userModel.js';
+import { findUserById, setUserActive, setUserVerified } from '../models/userModel.js';
 import { findSupplierById, updateSupplierVerification, listSuppliers, countSuppliers } from '../models/supplierModel.js';
 import { findProductById, updateProduct, deleteProduct } from '../models/productModel.js';
 import { findOrderById, listAllOrders } from '../models/orderModel.js';
 import { serializeOrder } from '../services/orderService.js';
 import { getProductDetail } from './marketplaceService.js';
+import { cascadeDeleteUser, cascadeDeleteSupplier, deleteSupplierFiles } from './cascadeService.js';
 
 export function listAdminUsers({ search = '', role = '', is_active = '', limit = 50, offset = 0 } = {}) {
   let sql = `
@@ -59,14 +60,8 @@ export function deleteAdminUser(id, adminUserId) {
     throw new ForbiddenError('You cannot delete your own admin account');
   }
 
-  const orderCount = db.prepare('SELECT COUNT(*) AS count FROM orders WHERE buyer_id = ?').get(id).count;
-  if (orderCount > 0) {
-    throw new ValidationError('Users with order history cannot be deleted. Deactivate the account instead.');
-  }
-
   const remove = db.transaction(() => {
-    db.prepare('DELETE FROM cart_items WHERE user_id = ?').run(id);
-    deleteUser(id);
+    cascadeDeleteUser(id);
   });
   remove();
 }
@@ -133,20 +128,15 @@ export function deleteAdminSupplier(id) {
   const supplier = findSupplierById(id);
   if (!supplier) throw new NotFoundError('Supplier not found');
 
-  const orderCount = db.prepare('SELECT COUNT(*) AS count FROM orders WHERE supplier_id = ?').get(id).count;
-  if (orderCount > 0) {
-    throw new ValidationError('Suppliers with order history cannot be deleted. Reject or suspend the supplier instead.');
-  }
-
+  let filesToDelete;
   const remove = db.transaction(() => {
-    db.prepare(`
-      DELETE FROM cart_items
-      WHERE product_id IN (SELECT id FROM products WHERE supplier_id = ?)
-    `).run(id);
-    db.prepare('DELETE FROM users WHERE organisation_id = ? AND role = ?').run(supplier.organisation_id, 'SUPPLIER');
-    db.prepare('DELETE FROM organisations WHERE id = ?').run(supplier.organisation_id);
+    filesToDelete = cascadeDeleteSupplier(id);
   });
   remove();
+
+  if (filesToDelete) {
+    deleteSupplierFiles(filesToDelete);
+  }
 }
 
 export function listAdminProducts({ search = '', category = '', supplier = '', stock_status = '', is_active = '', limit = 50, offset = 0 } = {}) {
